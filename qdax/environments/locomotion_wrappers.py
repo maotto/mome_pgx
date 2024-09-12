@@ -1,11 +1,15 @@
 from typing import Any, List, Optional, Sequence, Tuple
 
 import jax.numpy as jnp
+from sklearn.decomposition import PCA
 from brax import jumpy as jp
 from brax.envs import Env, State, Wrapper
 from brax.physics import config_pb2
 from brax.physics.base import QP, Info
 from brax.physics.system import System
+import jax
+from jax.experimental import host_callback as hcb
+
 
 from qdax.environments.base_wrappers import QDEnv
 
@@ -15,6 +19,9 @@ FEET_NAMES = {
     "walker2d": ["foot", "foot_left"],
     "hopper": ["foot"],
     "humanoid": ["left_shin", "right_shin"],
+    "kicker": ["$ Body 4"],
+    "jumper": ["$ Body 4", "$ Body 10"],
+    "kicker_exp": ["$ Body 4"]
 }
 
 
@@ -288,6 +295,7 @@ FORWARD_REWARD_NAMES = {
     "walker2d": "reward_forward",
     "hopper": "reward_forward",
     "humanoid": "forward_reward",
+    "jumper": "reward_forward"
 }
 
 
@@ -339,6 +347,9 @@ MINIMISE_ENERGY_REWARD_NAMES = {
     "walker2d": "reward_ctrl",
     "hopper": "reward_ctrl",
     "humanoid": "reward_quadctrl",
+    "kicker": "reward_ctrl",
+    "jumper": "reward_ctrl",
+    "kicker_exp": "reward_ctrl",
 }
 
 class MultiObjectiveRewardWrapper(Wrapper):
@@ -371,6 +382,273 @@ class MultiObjectiveRewardWrapper(Wrapper):
         new_reward = jnp.concatenate(
             (jp.array((state.metrics[self._fd_reward_field],)), 
             jp.array((state.metrics[self._minimise_energy_reward_field],))), 
+            axis=-1
+        )
+        return state.replace(reward=new_reward)  
+JOINTED_BODIES_NAMES = {
+    "kicker": ["hip_1", "ankle_1"],
+    "kicker_exp": ["hip_1", "ankle_1"]
+}
+
+
+class JointRangeWrapper(QDEnv):
+    """Wraps gym environments to add the used joint range data.
+
+    """
+
+    def __init__(self, env: Env, env_name: str):
+
+        if env_name not in JOINTED_BODIES_NAMES.keys():
+            raise NotImplementedError(f"This wrapper does not support {env_name} yet.")
+
+        super().__init__(config=None)
+
+        self.env = env
+        self._env_name = env_name
+        if hasattr(self.env, "sys"):
+            self.env.sys = QDSystem(self.env.sys.config)
+
+        self._joints_idx = jp.array(
+            [env.sys.joints[0].index.get(name) for name in JOINTED_BODIES_NAMES[env_name]]
+        )
+        self._feet_contact_idx = jp.array(
+            [env.sys.body.index.get(name) for name in FEET_NAMES[env_name]]
+        )
+
+
+    @property
+    def state_descriptor_length(self) -> int:
+        return self.behavior_descriptor_length
+
+    @property
+    def state_descriptor_name(self) -> str:
+        return "joint_range"
+
+    @property
+    def state_descriptor_limits(self) -> Tuple[List, List]:
+        return self.behavior_descriptor_limits
+
+    @property
+    def behavior_descriptor_length(self) -> int:
+        return len(self._joints_idx)
+
+    @property
+    def behavior_descriptor_limits(self) -> Tuple[List, List]:
+        bd_length = self.behavior_descriptor_length
+        return (jnp.zeros((bd_length,)), jnp.ones((bd_length,)))
+
+    @property
+    def name(self) -> str:
+        return self._env_name
+
+    def reset(self, rng: jp.ndarray) -> State:
+        state = self.env.reset(rng)
+        state.info["state_descriptor"] = jnp.clip(self._get_joint_angles_ratio(state), 0, 1) * self._get_feet_contact(
+            self.env.sys.info(state.qp)
+        )
+        return state
+
+    def step(self, state: State, action: jp.ndarray) -> State:
+        state = self.env.step(state, action)
+        state.info["state_descriptor"] = jnp.clip(self._get_joint_angles_ratio(state), 0, 1) * self._get_feet_contact(self.env.sys.aux_info)
+        return state
+
+    def _get_joint_angles_ratio(self, state: State) -> jp.ndarray:
+        
+        joint_angles, joint_vel = self.env.sys.joints[0].angle_vel(state.qp)
+
+        relevant_angles = joint_angles[self._joints_idx]
+        joint_limits = self.env.sys.joints[0].limit[self._joints_idx]
+        min_limits = joint_limits[:, 0, 0]
+        max_limits = joint_limits[:, 0, 1]
+
+        normalized_angles = (relevant_angles - min_limits) / (max_limits - min_limits)
+
+        return normalized_angles
+    
+    def _get_feet_contact(self, info: Info) -> float:
+        contacts = info.contact.vel
+        return jp.any(contacts[self._feet_contact_idx], axis=1).astype(jp.float32)
+
+    @property
+    def unwrapped(self) -> Env:
+        return self.env.unwrapped
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "__setstate__":
+            raise AttributeError(name)
+        return getattr(self.env, name)
+
+class ExplorationWrapper(QDEnv):
+    """Wraps gym environments to add the used joint range data.
+
+    """
+
+    def __init__(self, env: Env, env_name: str):
+
+        if env_name not in JOINTED_BODIES_NAMES.keys():
+            raise NotImplementedError(f"This wrapper does not support {env_name} yet.")
+
+        super().__init__(config=None)
+
+        self.env = env
+        self._env_name = env_name
+        if hasattr(self.env, "sys"):
+            self.env.sys = QDSystem(self.env.sys.config)
+
+        self._joints_idx = jp.array(
+            [env.sys.joints[0].index.get(name) for name in JOINTED_BODIES_NAMES[env_name]]
+        )
+        self._feet_contact_idx = jp.array(
+            [env.sys.body.index.get(name) for name in FEET_NAMES[env_name]]
+        )
+        self.object_pos = jp.array([0.7, 0.7, 0.18])
+
+
+    @property
+    def state_descriptor_length(self) -> int:
+        return self.behavior_descriptor_length
+
+    @property
+    def state_descriptor_name(self) -> str:
+        return "joint_range"
+
+    @property
+    def state_descriptor_limits(self) -> Tuple[List, List]:
+        return self.behavior_descriptor_limits
+
+    @property
+    def behavior_descriptor_length(self) -> int:
+        return len(self._joints_idx)
+
+    @property
+    def behavior_descriptor_limits(self) -> Tuple[List, List]:
+        bd_length = self.behavior_descriptor_length
+        return (jnp.zeros((bd_length,)), jnp.ones((bd_length,)))
+
+    @property
+    def name(self) -> str:
+        return self._env_name
+
+    def reset(self, rng: jp.ndarray) -> State:
+        state = self.env.reset(rng)
+        state.info["state_descriptor"] = jp.array([self._get_joint_angles_ratio(state), 1.0]) * self._get_feet_contact(self.env.sys.info(state.qp))
+        # hcb.id_print(state.info["state_descriptor"], what="Reset: behavior_descriptor")
+        return state
+
+    def step(self, state: State, action: jp.ndarray) -> State:
+        state = self.env.step(state, action)
+        state.info["state_descriptor"] = jp.array([self._get_joint_angles_ratio(state), 1.0]) * self._get_feet_contact(self.env.sys.aux_info)
+        # hcb.id_print(state.info["state_descriptor"], what="Step: behavior_descriptor")
+        return state
+
+
+    def _get_joint_angles_ratio(self, state: State) -> float:
+        
+        joint_angles, joint_vel = self.env.sys.joints[0].angle_vel(state.qp)
+
+        relevant_angles = joint_angles[self._joints_idx]
+        joint_limits = self.env.sys.joints[0].limit[self._joints_idx]
+        min_limits = joint_limits[:, 0, 0]
+        max_limits = joint_limits[:, 0, 1]
+
+        normalized_angles = (relevant_angles - min_limits) / (max_limits - min_limits)
+        sigmoid = self.shifted_sigmoid(normalized_angles[0]+normalized_angles[1])
+        # mean = jnp.mean(normalized_angles) 
+        # mean = jnp.clip(mean, 0.0, 1.0)
+
+        return sigmoid
+    def shifted_sigmoid(self, x, shift=1.0):
+            return 1 / (1 + jnp.exp(-3*(x - shift)))
+    
+    def _get_feet_contact(self, info: Info) -> float:
+        contacts = info.contact.vel
+        return jp.any(contacts[self._feet_contact_idx], axis=1).astype(jp.float32)
+
+    @property
+    def unwrapped(self) -> Env:
+        return self.env.unwrapped
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "__setstate__":
+            raise AttributeError(name)
+        return getattr(self.env, name)
+
+
+
+ACCURACY_REWARD_NAMES = {
+    "kicker": "reward_dist",
+    "kicker_exp": "reward_dist",
+}
+class MORewardWrapper(Wrapper):
+    """Wraps gym environments and replaces reward with multi-objective rewards.
+
+    Utilisation is simple: create an environment with Brax, pass
+    it to the wrapper with the name of the environment, and it will
+    work like before and will simply use forward reward and negative energy as rewards.
+    """
+
+    def __init__(self, env: Env, env_name: str) -> None:
+        if env_name not in (ACCURACY_REWARD_NAMES.keys() and MINIMISE_ENERGY_REWARD_NAMES.keys()):
+            raise NotImplementedError(f"This wrapper does not support {env_name} yet.")
+        super().__init__(env)
+        self._env_name = env_name
+        self._acc_reward_field = ACCURACY_REWARD_NAMES[env_name]
+        self._minimise_energy_reward_field = MINIMISE_ENERGY_REWARD_NAMES[env_name]
+
+    @property
+    def name(self) -> str:
+        return self._env_name
+
+    def reset(self, rng: jp.ndarray) -> State:
+        state = self.env.reset(rng)
+        new_reward = jp.zeros((2,))
+        return state.replace(reward=new_reward)
+
+    def step(self, state: State, action: jp.ndarray) -> State:
+        state = self.env.step(state, action)
+        new_reward = jnp.concatenate(
+            (jp.array((state.metrics[self._acc_reward_field],)), 
+            jp.array((state.metrics[self._minimise_energy_reward_field],))), 
+            axis=-1
+        )
+        return state.replace(reward=new_reward)  
+
+EXPLORATION_REWARD_NAMES = {
+    "kicker": "reward_near",
+}
+class TriORewardWrapper(Wrapper):
+    """Wraps gym environments and replaces reward with multi-objective rewards.
+
+    Utilisation is simple: create an environment with Brax, pass
+    it to the wrapper with the name of the environment, and it will
+    work like before and will simply use forward reward and negative energy as rewards.
+    """
+
+    def __init__(self, env: Env, env_name: str) -> None:
+        if env_name not in (ACCURACY_REWARD_NAMES.keys() and MINIMISE_ENERGY_REWARD_NAMES.keys() and EXPLORATION_REWARD_NAMES.keys()):
+            raise NotImplementedError(f"This wrapper does not support {env_name} yet.")
+        super().__init__(env)
+        self._env_name = env_name
+        self._acc_reward_field = ACCURACY_REWARD_NAMES[env_name]
+        self._minimise_energy_reward_field = MINIMISE_ENERGY_REWARD_NAMES[env_name]
+        self._exp_reward_field = EXPLORATION_REWARD_NAMES[env_name]
+
+    @property
+    def name(self) -> str:
+        return self._env_name
+
+    def reset(self, rng: jp.ndarray) -> State:
+        state = self.env.reset(rng)
+        new_reward = jp.zeros((3,))
+        return state.replace(reward=new_reward)
+
+    def step(self, state: State, action: jp.ndarray) -> State:
+        state = self.env.step(state, action)
+        new_reward = jnp.concatenate(
+            (jp.array((state.metrics[self._acc_reward_field],)), 
+            jp.array((state.metrics[self._minimise_energy_reward_field],)),
+            jp.array((state.metrics[self._exp_reward_field],))), 
             axis=-1
         )
         return state.replace(reward=new_reward)  

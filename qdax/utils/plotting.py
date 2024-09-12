@@ -381,6 +381,8 @@ def plot_mome_pareto_fronts(
     axes: Optional[plt.Axes] = None,
     color_style: Optional[str] = "hsv",
     with_global: Optional[bool] = False,
+    fitness_xlim: Optional[Tuple[float, float]] = None,
+    fitness_ylim: Optional[Tuple[float, float]] = None,
 ) -> plt.Axes:
     """Plot the pareto fronts from all cells of the mome repertoire.
 
@@ -435,6 +437,11 @@ def plot_mome_pareto_fronts(
             axes[0].plot(cell_scores[:, 0], cell_scores[:, 1], "o", color=color)
 
             axes[1].plot(cell[:, 0], cell[:, 1], "o", color=color)
+
+    if fitness_xlim is not None:
+        axes[0].set_xlim(fitness_xlim)
+    if fitness_ylim is not None:
+        axes[0].set_ylim(fitness_ylim)
 
     # create the regions and vertices from centroids
     regions, vertices = get_voronoi_finite_polygons_2d(centroids)

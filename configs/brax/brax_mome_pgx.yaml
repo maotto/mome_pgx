@@ -4,19 +4,19 @@ hydra:
 
 # Env config
 seed: 42
-env_name: walker2d_multi
+env_name: kicker_exp_multi
 algo_name: mome_pgx
-fixed_init_state: True
+fixed_init_state: False
 episode_length: 1000
 
 # MOO parameters
 num_objective_functions: 2
-pareto_front_max_length: 50
+pareto_front_max_length: 20
 
 # Initialisation parameters
-num_evaluations: 1024000
+num_evaluations: 51200
 num_init_cvt_samples: 50000 
-num_centroids: 128 
+num_centroids: 256 
 
 # Brax parameters
 num_descriptor_dimensions: 2
@@ -34,9 +34,9 @@ mutation_qpg_batch_size: 64
 
 # Logging parameters
 metrics_log_period: 50
-plot_repertoire_period: 400
-checkpoint_period: 500
-save_checkpoint_visualisations: False
+plot_repertoire_period: 50
+checkpoint_period: 50
+save_checkpoint_visualisations: True
 save_final_visualisations: True
 num_save_visualisations: 5
 
@@ -49,7 +49,7 @@ policy_learning_rate: 0.001
 noise_clip: 0.5 
 policy_noise: 0.2 
 discount: 0.99 
-reward_scaling: [1.0, 1.0]  
+reward_scaling: [2.0, 2.0]  
 transitions_batch_size: 256 
 soft_tau_update: 0.005 
 policy_delay: 2

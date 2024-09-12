@@ -139,3 +139,48 @@ def compute_hypervolume(
     hypervolume = jnp.sum(sumdiff)
 
     return hypervolume
+
+# def compute_hypervolume(pareto_front: ParetoFront[jnp.ndarray], reference_point: jnp.ndarray) -> jnp.ndarray:
+#     """Compute hypervolume of a pareto front.
+#     Args:
+#         pareto_front: a pareto front, shape (pareto_size, num_objectives)
+#         reference_point: a reference point to compute the volume, of shape (num_objectives,)
+#     Returns:
+#         The hypervolume of the pareto front.
+#     """
+#     # check the number of objectives
+#     num_objectives = pareto_front.shape[1]
+#     custom_message = (
+#         "Hypervolume calculation for more than 3 objectives not yet supported."
+#     )
+#     chex.assert_axis_dimension(
+#         tensor=pareto_front, axis=1, expected=3, custom_message=custom_message
+#     )
+
+#     # concatenate the reference point to prepare for the volume computation
+#     pareto_front = jnp.concatenate(
+#         (pareto_front, jnp.expand_dims(reference_point, axis=0)), axis=0
+#     )
+
+#     # get ordered indices for the first objective
+#     idx = jnp.argsort(pareto_front[:, 0])
+
+#     # create the mask - hide fake elements (those having -inf fitness)
+#     mask = pareto_front[idx, :] != -jnp.inf
+
+#     # sort the front and offset it with the ref point
+#     sorted_front = (pareto_front[idx, :] - reference_point) * mask
+
+#     # compute volume rectangles between successive points
+#     volume = 0.0
+#     for i in range(len(sorted_front) - 1):
+#         volume += (
+#             (sorted_front[i + 1, 0] - sorted_front[i, 0])
+#             * (sorted_front[i + 1, 1] - sorted_front[i, 1])
+#             * sorted_front[i + 1, 2]
+#         )
+
+#     # remove the irrelevant values - where a mask was applied
+#     volume *= mask[:-1, 0] * mask[:-1, 1] * mask[:-1, 2]
+
+#     return jnp.sum(volume)

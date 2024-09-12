@@ -8,6 +8,9 @@ from qdax.environments.base_wrappers import QDEnv, StateDescriptorResetWrapper
 from qdax.environments.bd_extractors import (
     get_feet_contact_proportion,
     get_final_xy_position,
+    get_joint_workspace_ratio,
+    get_exp_and_ratio
+
 )
 from qdax.environments.exploration_wrappers import MazeWrapper, TrapWrapper
 from qdax.environments.init_state_wrapper import FixedInitialStateWrapper
@@ -16,6 +19,10 @@ from qdax.environments.locomotion_wrappers import (
     MultiObjectiveRewardWrapper,
     NoForwardRewardWrapper,
     XYPositionWrapper,
+    MORewardWrapper,
+    JointRangeWrapper,
+    TriORewardWrapper,
+    ExplorationWrapper
 )
 from qdax.environments.pointmaze import PointMaze
 from qdax.environments.wrappers import CompletedEvalWrapper
@@ -58,6 +65,12 @@ behavior_descriptor_extractor = {
     "halfcheetah_multi": get_feet_contact_proportion,
     "hopper_multi": get_feet_contact_proportion,
     "walker2d_multi": get_feet_contact_proportion,
+    "kicker_multi": get_joint_workspace_ratio,
+    "jumper_multi": get_feet_contact_proportion,
+    "kicker_tri": get_joint_workspace_ratio,
+    "kicker_exp_multi": get_exp_and_ratio,
+
+    
 }
 
 _qdax_envs = {
@@ -138,6 +151,26 @@ _qdax_custom_envs = {
     "walker2d_multi": {
         "env": "walker2d",
         "wrappers": [FeetContactWrapper, MultiObjectiveRewardWrapper],
+        "kwargs": [{}, {}],
+    },
+    "kicker_multi": {
+        "env": "kicker",
+        "wrappers": [JointRangeWrapper, MORewardWrapper],
+        "kwargs": [{}, {}],
+    },
+    "kicker_exp_multi": {
+        "env": "kicker_exp",
+        "wrappers": [ExplorationWrapper, MORewardWrapper],
+        "kwargs": [{}, {}],
+    },
+    "jumper_multi": {
+        "env": "jumper",
+        "wrappers": [FeetContactWrapper, MultiObjectiveRewardWrapper],
+        "kwargs": [{}, {}],
+    },
+    "kicker_tri": {
+        "env": "kicker",
+        "wrappers": [JointRangeWrapper, TriORewardWrapper],
         "kwargs": [{}, {}],
     },
 }
