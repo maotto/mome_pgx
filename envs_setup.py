@@ -56,6 +56,42 @@ def get_env_metrics(env_name,
         """
         env_metrics["min_rewards"] = [-100, -500]
         env_metrics["max_rewards"] = [500, 0]
+
+    elif env_name == "kicker_multi":
+        # Empirically inferred min and max rewards for episode_length = 1000
+        """
+        MIN SCORES ACROSS ALL EXPERIMENTS: [-0.0001, -0.0001]
+        MAX SCORES ACROSS ALL EXPERIMENTS: [0.0001, -0.0001]
+        """
+        env_metrics["min_rewards"] = [-70000, -2500]
+        env_metrics["max_rewards"] = [0, 0]
+
+    elif env_name == "kicker_exp_multi":
+        # Empirically inferred min and max rewards for episode_length = 1000
+        """
+        MIN SCORES ACROSS ALL EXPERIMENTS: [-0.0001, -0.0001]
+        MAX SCORES ACROSS ALL EXPERIMENTS: [0.0001, -0.0001]
+        """
+        env_metrics["min_rewards"] = [-70000, -2500]
+        env_metrics["max_rewards"] = [0, 0]
+
+    elif env_name == "jumper_multi":
+        # Empirically inferred min and max rewards for episode_length = 1000
+        """
+        MIN SCORES ACROSS ALL EXPERIMENTS: [-0.0001, -0.0001]
+        MAX SCORES ACROSS ALL EXPERIMENTS: [0.0001, -0.0001]
+        """
+        env_metrics["min_rewards"] = [-4000, -4500]
+        env_metrics["max_rewards"] = [4000, 0]
+
+    elif env_name == "kicker_tri":
+        # Empirically inferred min and max rewards for episode_length = 1000
+        """
+        MIN SCORES ACROSS ALL EXPERIMENTS: [-0.0001, -0.0001]
+        MAX SCORES ACROSS ALL EXPERIMENTS: [0.0001, -0.0001]
+        """
+        env_metrics["min_rewards"] = [-350, -4500, -1000]
+        env_metrics["max_rewards"] = [4000, 0, 0]
     
     # Multiply min and max rewards by number of timesteps
     env_metrics["min_rewards"] = np.array(env_metrics["min_rewards"]) * episode_length/1000

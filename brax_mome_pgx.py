@@ -1,6 +1,7 @@
 import hydra
 import jax.numpy as jnp
 import jax
+import logging
 
 from brax_step_functions import play_mo_step_fn
 from dataclasses import dataclass
@@ -86,9 +87,17 @@ def main(config: ExperimentConfig) -> None:
     env_metrics = get_env_metrics(config.env_name,
         episode_length=config.episode_length
     )
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger().handlers[0].setLevel(logging.INFO)
+    logger = logging.getLogger(f"{__name__}")
+    output_dir = "./" 
 
     reference_point = env_metrics["min_rewards"]
     max_rewards = env_metrics["max_rewards"]
+    logger.warning(f"Reference Point: {reference_point} ---")
+    logger.warning(f"Max rewards: {max_rewards} ---")
+    logger.warning(f"Reward scaling: {config.reward_scaling} ---")
+
 
     # Init a random key
     random_key = jax.random.PRNGKey(config.seed)
