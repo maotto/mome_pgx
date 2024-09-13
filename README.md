@@ -75,3 +75,11 @@ where
 - [EXTRA ARGUMENTS] is a list of any futher arguments that you want to add. For example, you may want to change the random seed or Brax environment.
 
 
+## Installation example on 22.04 machines
+sudo apt install python3.9-venv
+python3.9 -m venv .env
+source .env/bin/activate
+pip install -r requirements.txt
+
+pip install jaxlib==0.3.15 -f https://storage.googleapis.com/jax-releases/jax_releases.html
+pip install -U jax==0.3.17 flax==0.6.0 scikit-learn numpy==1.25 chex scipy==1.10.1 hydra-core==1.3.2
